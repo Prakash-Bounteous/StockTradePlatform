@@ -20,6 +20,7 @@ public class AdminStockController {
 
     @DeleteMapping("/delete/{id}")
     public String deleteStock(@PathVariable Long id) {
+        System.out.println("Delete API");
         adminService.deleteStock(id);
         return "Stock removed";
     }

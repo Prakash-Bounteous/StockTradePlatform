@@ -1,45 +1,48 @@
 package com.trading.platform.engine.service;
 
+import com.trading.platform.engine.OrderBook;
+import com.trading.platform.engine.OrderBookManager;
+import com.trading.platform.order.dto.OrderBookResponse;
 import com.trading.platform.order.entity.Order;
-import com.trading.platform.order.model.OrderSide;
-import com.trading.platform.order.model.OrderStatus;
-import com.trading.platform.order.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class OrderBookService {
 
-    private final OrderRepository orderRepository;
-    private final MatchingEngine matchingEngine;
+    private final OrderBookManager orderBookManager;
 
-    public void processOrder(Order newOrder) {
+    public List<OrderBookResponse> getBuyOrders(String symbol) {
 
-        if (newOrder.getSide() == OrderSide.BUY) {
+        OrderBook orderBook =
+                orderBookManager.getOrderBook(symbol);
 
-            List<Order> sellOrders =
-                    orderRepository
-                            .findByStockIdAndSideAndStatusOrderByPriceAscCreatedAtAsc(
-                                    newOrder.getStock().getId(),
-                                    OrderSide.SELL,
-                                    OrderStatus.PENDING
-                            );
+        return orderBook.getBuyOrders()
+                .stream()
+                .map(this::convert)
+                .collect(Collectors.toList());
+    }
 
-            for (Order sellOrder : sellOrders) {
+    public List<OrderBookResponse> getSellOrders(String symbol) {
 
-                if (newOrder.getRemainingQuantity() == 0) {
-                    break;
-                }
+        OrderBook orderBook =
+                orderBookManager.getOrderBook(symbol);
 
-                if (newOrder.getPrice()
-                        .compareTo(sellOrder.getPrice()) >= 0) {
+        return orderBook.getSellOrders()
+                .stream()
+                .map(this::convert)
+                .collect(Collectors.toList());
+    }
 
-                    matchingEngine.matchOrders(newOrder, sellOrder);
-                }
-            }
-        }
+    private OrderBookResponse convert(Order order) {
+
+        return new OrderBookResponse(
+                order.getPrice(),
+                order.getRemainingQuantity()
+        );
     }
 }

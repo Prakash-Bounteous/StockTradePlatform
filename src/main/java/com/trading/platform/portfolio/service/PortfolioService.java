@@ -7,6 +7,8 @@ import com.trading.platform.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+
 @Service
 @RequiredArgsConstructor
 public class PortfolioService {
@@ -29,13 +31,27 @@ public class PortfolioService {
                     .user(user)
                     .stock(stock)
                     .quantity(quantity)
+                    .averagePrice(stock.getPrice())
                     .build();
 
         } else {
 
-            portfolio.setQuantity(
-                    portfolio.getQuantity() + quantity
-            );
+            long totalQuantity =
+                    portfolio.getQuantity() + quantity;
+
+            BigDecimal totalCost =
+                    portfolio.getAveragePrice()
+                            .multiply(BigDecimal.valueOf(portfolio.getQuantity()))
+                            .add(
+                                    stock.getPrice()
+                                            .multiply(BigDecimal.valueOf(quantity))
+                            );
+
+            BigDecimal newAverage =
+                    totalCost.divide(BigDecimal.valueOf(totalQuantity));
+
+            portfolio.setQuantity(totalQuantity);
+            portfolio.setAveragePrice(newAverage);
         }
 
         portfolioRepository.save(portfolio);
@@ -51,10 +67,17 @@ public class PortfolioService {
                         )
                         .orElseThrow();
 
-        portfolio.setQuantity(
-                portfolio.getQuantity() - quantity
-        );
+        if (portfolio.getQuantity() <= quantity) {
 
-        portfolioRepository.save(portfolio);
+            portfolioRepository.delete(portfolio);
+
+        } else {
+
+            portfolio.setQuantity(
+                    portfolio.getQuantity() - quantity
+            );
+
+            portfolioRepository.save(portfolio);
+        }
     }
 }

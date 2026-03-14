@@ -10,8 +10,8 @@ public class MarketService {
 
     private MarketStatus marketStatus = MarketStatus.CLOSED;
 
-    private final LocalTime marketOpen = LocalTime.of(9, 15);
-    private final LocalTime marketClose = LocalTime.of(15, 30);
+    private final LocalTime marketOpen = LocalTime.of(1, 15);
+    private final LocalTime marketClose = LocalTime.of(23, 30);
 
     public boolean isMarketOpen() {
 

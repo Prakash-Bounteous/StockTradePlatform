@@ -1,8 +1,8 @@
 package com.trading.platform.order.model;
 
-    public enum OrderType {
+public enum OrderType {
 
     MARKET,
-    LIMIT
-
+    LIMIT,
+    STOP_LOSS
 }

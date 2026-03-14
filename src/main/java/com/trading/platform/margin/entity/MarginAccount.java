@@ -22,11 +22,13 @@ public class MarginAccount {
     @OneToOne
     private User user;
 
-    private Integer marginMultiplier;
+    private Integer marginMultiplier = 2;
 
-    private BigDecimal usedMargin;
+    @Builder.Default
+    private BigDecimal usedMargin = BigDecimal.ZERO;
 
-    private BigDecimal availableMargin;
+    @Builder.Default
+    private BigDecimal availableMargin = BigDecimal.valueOf(100000);
 
-    private boolean marginCallTriggered;
+    private boolean marginCallTriggered = false;
 }

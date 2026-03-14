@@ -1,8 +1,8 @@
 package com.trading.platform.engine.service;
 
+import com.trading.platform.engine.OrderBook;
 import com.trading.platform.order.entity.Order;
-import com.trading.platform.order.model.OrderStatus;
-import com.trading.platform.order.repository.OrderRepository;
+import com.trading.platform.order.model.OrderType;
 import com.trading.platform.trade.service.TradeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -13,47 +13,76 @@ import java.math.BigDecimal;
 @RequiredArgsConstructor
 public class MatchingEngine {
 
-    private final OrderRepository orderRepository;
     private final TradeService tradeService;
 
-    public void matchOrders(Order buyOrder, Order sellOrder) {
+    public void match(OrderBook orderBook) {
 
-        Long tradeQuantity = Math.min(
-                buyOrder.getRemainingQuantity(),
-                sellOrder.getRemainingQuantity()
-        );
+        while (true) {
 
-        BigDecimal price = sellOrder.getPrice();
+            Order buyOrder = orderBook.getBuyOrders().peek();
+            Order sellOrder = orderBook.getSellOrders().peek();
+
+            if (buyOrder == null || sellOrder == null) {
+                break;
+            }
+
+            if (!isMatchPossible(buyOrder, sellOrder)) {
+                break;
+            }
+
+            executeTrade(orderBook, buyOrder, sellOrder);
+        }
+    }
+
+    private boolean isMatchPossible(Order buy, Order sell) {
+
+        if (buy.getType() == OrderType.MARKET
+                || sell.getType() == OrderType.MARKET) {
+            return true;
+        }
+
+        BigDecimal buyPrice = buy.getPrice();
+        BigDecimal sellPrice = sell.getPrice();
+
+        return buyPrice.compareTo(sellPrice) >= 0;
+    }
+
+    private void executeTrade(
+            OrderBook orderBook,
+            Order buy,
+            Order sell
+    ) {
+
+        long quantity =
+                Math.min(
+                        buy.getRemainingQuantity(),
+                        sell.getRemainingQuantity()
+                );
+
+        BigDecimal price = sell.getPrice();
 
         tradeService.executeTrade(
-                buyOrder.getUser(),
-                sellOrder.getUser(),
-                buyOrder.getStock(),
-                tradeQuantity,
+                buy.getUser(),
+                sell.getUser(),
+                buy.getStock(),
+                quantity,
                 price
         );
 
-        buyOrder.setRemainingQuantity(
-                buyOrder.getRemainingQuantity() - tradeQuantity
+        buy.setRemainingQuantity(
+                buy.getRemainingQuantity() - quantity
         );
 
-        sellOrder.setRemainingQuantity(
-                sellOrder.getRemainingQuantity() - tradeQuantity
+        sell.setRemainingQuantity(
+                sell.getRemainingQuantity() - quantity
         );
 
-        updateOrderStatus(buyOrder);
-        updateOrderStatus(sellOrder);
+        if (buy.getRemainingQuantity() == 0) {
+            orderBook.getBuyOrders().poll();
+        }
 
-        orderRepository.save(buyOrder);
-        orderRepository.save(sellOrder);
-    }
-
-    private void updateOrderStatus(Order order) {
-
-        if (order.getRemainingQuantity() == 0) {
-            order.setStatus(OrderStatus.EXECUTED);
-        } else {
-            order.setStatus(OrderStatus.PARTIALLY_FILLED);
+        if (sell.getRemainingQuantity() == 0) {
+            orderBook.getSellOrders().poll();
         }
     }
 }

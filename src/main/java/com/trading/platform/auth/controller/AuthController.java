@@ -14,6 +14,7 @@ public class AuthController {
 
     @PostMapping("/register")
     public String register(@RequestBody RegisterRequest request) {
+        System.out.println("api hit succsejjjjjjjjjjjjjjjjjjjjjjjjjjj");
         authService.register(request);
         return "User registered successfully";
     }

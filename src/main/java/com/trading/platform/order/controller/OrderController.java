@@ -17,7 +17,7 @@ public class OrderController {
     public String placeOrder(
             Authentication authentication,
             @RequestBody PlaceOrderRequest request) {
-
+        System.out.println("Order place APi is hit");
         String username = authentication.getName();
 
         return orderService.placeOrder(username, request);
