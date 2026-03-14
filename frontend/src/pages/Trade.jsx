@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { getStocks, placeOrder, getPriceHistory, getBuyOrders, getSellOrders } from '../services/api'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
-import { getMe } from '../services/api'
 import { TrendingUp, TrendingDown, Search } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import './Trade.css'
@@ -24,7 +23,7 @@ export default function Trade() {
   const { symbol: paramSymbol } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
-  const { user, setUser } = useAuth()
+  const { user, refreshUser } = useAuth()
 
   const [stocks, setStocks] = useState([])
   const [selected, setSelected] = useState(null)
@@ -34,7 +33,6 @@ export default function Trade() {
   const [sellOrders, setSellOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [placing, setPlacing] = useState(false)
-
   const [form, setForm] = useState({ side: 'BUY', type: 'MARKET', quantity: '', price: '' })
 
   useEffect(() => {
@@ -80,6 +78,7 @@ export default function Trade() {
     if (!selected) return toast.error('Select a stock first')
     if (!form.quantity || Number(form.quantity) <= 0) return toast.error('Enter valid quantity')
     if (form.type === 'LIMIT' && (!form.price || Number(form.price) <= 0)) return toast.error('Enter limit price')
+
     setPlacing(true)
     try {
       await placeOrder({
@@ -89,10 +88,13 @@ export default function Trade() {
         quantity: Number(form.quantity),
         price: form.type === 'LIMIT' ? Number(form.price) : null
       })
-      toast.success(`${form.side} order placed for ${form.quantity} × ${selected.symbol}`)
+      toast.success(`${form.side} order placed — ${form.quantity} × ${selected.symbol}`)
       setForm(p => ({ ...p, quantity: '', price: '' }))
-      const meRes = await getMe()
-      setUser(meRes.data)
+
+      // Refresh user balance immediately
+      await refreshUser()
+
+      // Refresh order book
       const [bo, so] = await Promise.all([getBuyOrders(selected.symbol), getSellOrders(selected.symbol)])
       setBuyOrders(bo.data)
       setSellOrders(so.data)
@@ -121,21 +123,14 @@ export default function Trade() {
         <div className="stock-list-panel card">
           <div className="search-wrap">
             <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-            <input
-              type="text"
-              placeholder="Search stocks..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ paddingLeft: 30 }}
-            />
+            <input type="text" placeholder="Search stocks..." value={search}
+              onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 30 }} />
           </div>
           <div className="stock-list">
             {filteredStocks.map(stock => (
-              <div
-                key={stock.id}
+              <div key={stock.id}
                 className={`stock-item ${selected?.symbol === stock.symbol ? 'active' : ''} ${!stock.tradable ? 'halted' : ''}`}
-                onClick={() => selectStock(stock)}
-              >
+                onClick={() => selectStock(stock)}>
                 <div>
                   <div className="stock-symbol">{stock.symbol}</div>
                   <div className="stock-company">{stock.companyName}</div>
@@ -149,11 +144,10 @@ export default function Trade() {
           </div>
         </div>
 
-        {/* Chart & Trading */}
+        {/* Chart & Order Book */}
         <div className="trade-center">
           {selected ? (
             <>
-              {/* Stock Header */}
               <div className="card stock-header">
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -168,14 +162,14 @@ export default function Trade() {
                   <div className="mono" style={{ fontSize: 28, fontWeight: 700, color: priceChange >= 0 ? 'var(--green)' : 'var(--red)' }}>
                     ₹{Number(selected.price).toFixed(2)}
                   </div>
-                  <div className={`mono ${priceChange >= 0 ? 'positive' : 'negative'}`} style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+                  <div className={`mono ${priceChange >= 0 ? 'positive' : 'negative'}`}
+                    style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
                     {priceChange >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
                     {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}%
                   </div>
                 </div>
               </div>
 
-              {/* Chart */}
               <div className="card">
                 <div className="card-header"><span className="card-title">Price History</span></div>
                 {priceHistory.length > 1 ? (
@@ -190,24 +184,20 @@ export default function Trade() {
                   </ResponsiveContainer>
                 ) : (
                   <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                    Price history will appear as trades execute
+                    Price history will appear shortly (updates every 5s)
                   </div>
                 )}
               </div>
 
-              {/* Order Book */}
               <div className="grid-2">
                 <div className="card">
                   <div className="card-header"><span className="card-title" style={{ color: 'var(--green)' }}>Buy Orders</span></div>
                   <table><thead><tr><th>Price</th><th>Qty</th></tr></thead>
                     <tbody>
                       {buyOrders.length === 0
-                        ? <tr><td colSpan={2} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>No buy orders</td></tr>
+                        ? <tr><td colSpan={2} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>No pending buy orders</td></tr>
                         : buyOrders.slice(0, 5).map((o, i) => (
-                          <tr key={i}>
-                            <td className="mono positive">₹{Number(o.price).toFixed(2)}</td>
-                            <td className="mono">{o.quantity}</td>
-                          </tr>
+                          <tr key={i}><td className="mono positive">₹{Number(o.price).toFixed(2)}</td><td className="mono">{o.quantity}</td></tr>
                         ))}
                     </tbody>
                   </table>
@@ -217,12 +207,9 @@ export default function Trade() {
                   <table><thead><tr><th>Price</th><th>Qty</th></tr></thead>
                     <tbody>
                       {sellOrders.length === 0
-                        ? <tr><td colSpan={2} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>No sell orders</td></tr>
+                        ? <tr><td colSpan={2} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>No pending sell orders</td></tr>
                         : sellOrders.slice(0, 5).map((o, i) => (
-                          <tr key={i}>
-                            <td className="mono negative">₹{Number(o.price).toFixed(2)}</td>
-                            <td className="mono">{o.quantity}</td>
-                          </tr>
+                          <tr key={i}><td className="mono negative">₹{Number(o.price).toFixed(2)}</td><td className="mono">{o.quantity}</td></tr>
                         ))}
                     </tbody>
                   </table>
@@ -248,14 +235,10 @@ export default function Trade() {
           </div>
 
           <div className="side-toggle">
-            <button
-              className={`side-btn ${form.side === 'BUY' ? 'buy-active' : ''}`}
-              onClick={() => setForm(p => ({ ...p, side: 'BUY' }))}
-            >BUY</button>
-            <button
-              className={`side-btn ${form.side === 'SELL' ? 'sell-active' : ''}`}
-              onClick={() => setForm(p => ({ ...p, side: 'SELL' }))}
-            >SELL</button>
+            <button className={`side-btn ${form.side === 'BUY' ? 'buy-active' : ''}`}
+              onClick={() => setForm(p => ({ ...p, side: 'BUY' }))}>BUY</button>
+            <button className={`side-btn ${form.side === 'SELL' ? 'sell-active' : ''}`}
+              onClick={() => setForm(p => ({ ...p, side: 'SELL' }))}>SELL</button>
           </div>
 
           <div className="form-group">
@@ -268,26 +251,15 @@ export default function Trade() {
 
           <div className="form-group">
             <label>Quantity</label>
-            <input
-              type="number"
-              min="1"
-              placeholder="Number of shares"
-              value={form.quantity}
-              onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))}
-            />
+            <input type="number" min="1" placeholder="Number of shares" value={form.quantity}
+              onChange={e => setForm(p => ({ ...p, quantity: e.target.value }))} />
           </div>
 
           {form.type === 'LIMIT' && (
             <div className="form-group">
               <label>Limit Price (₹)</label>
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                placeholder="Price per share"
-                value={form.price}
-                onChange={e => setForm(p => ({ ...p, price: e.target.value }))}
-              />
+              <input type="number" min="0.01" step="0.01" placeholder="Price per share" value={form.price}
+                onChange={e => setForm(p => ({ ...p, price: e.target.value }))} />
             </div>
           )}
 
@@ -295,7 +267,8 @@ export default function Trade() {
             <div className="order-estimate">
               <span className="muted" style={{ fontSize: 12 }}>Estimated Value</span>
               <span className="mono" style={{ fontWeight: 700 }}>
-                ₹{(Number(form.type === 'LIMIT' && form.price ? form.price : selected?.price || 0) * Number(form.quantity || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                ₹{(Number(form.type === 'LIMIT' && form.price ? form.price : selected?.price || 0) * Number(form.quantity || 0))
+                  .toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </span>
             </div>
           )}

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { getMe } from '../services/api'
 
 const AuthContext = createContext(null)
@@ -6,6 +6,12 @@ const AuthContext = createContext(null)
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  const refreshUser = useCallback(() => {
+    return getMe()
+      .then(res => { setUser(res.data); return res.data })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -30,7 +36,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loginUser, logoutUser, loading }}>
+    <AuthContext.Provider value={{ user, setUser, loginUser, logoutUser, loading, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )

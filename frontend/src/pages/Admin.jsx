@@ -11,19 +11,21 @@ export default function Admin() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
   const toast = useToast()
 
   const load = () => {
-    getStocks().then(r => setStocks(r.data)).finally(() => setLoading(false))
+    getStocks()
+      .then(r => setStocks(r.data.filter(s => s.companyName && s.symbol !== 'system')))
+      .finally(() => setLoading(false))
   }
 
   useEffect(() => { load() }, [])
 
   const handleCreate = async (e) => {
     e.preventDefault()
-    if (!form.symbol || !form.companyName || !form.price || !form.totalShares) {
+    if (!form.symbol || !form.companyName || !form.price || !form.totalShares)
       return toast.error('All fields are required')
-    }
     setSubmitting(true)
     try {
       await adminCreateStock({
@@ -45,11 +47,16 @@ export default function Admin() {
 
   const handleDelete = async (id, symbol) => {
     if (!window.confirm(`Delete ${symbol}? This cannot be undone.`)) return
+    setDeletingId(id)
     try {
       await adminDeleteStock(id)
       toast.success(`${symbol} deleted`)
       load()
-    } catch { toast.error('Delete failed') }
+    } catch (err) {
+      toast.error(err.response?.data || `Failed to delete ${symbol}`)
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   const handleToggle = async (stock) => {
@@ -62,7 +69,9 @@ export default function Admin() {
         toast.success(`Trading enabled for ${stock.symbol}`)
       }
       load()
-    } catch { toast.error('Toggle failed') }
+    } catch (err) {
+      toast.error(err.response?.data || 'Toggle failed')
+    }
   }
 
   if (loading) return <div className="page"><div className="spinner" /></div>
@@ -77,12 +86,12 @@ export default function Admin() {
           </div>
           <p className="muted" style={{ fontSize: 13 }}>Manage stocks and trading controls</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowForm(p => !p)} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <button className="btn-primary" onClick={() => setShowForm(p => !p)}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <Plus size={15} /> {showForm ? 'Cancel' : 'Add Stock'}
         </button>
       </div>
 
-      {/* Create Stock Form */}
       {showForm && (
         <div className="card fade-in" style={{ marginBottom: 24, border: '1px solid var(--accent)44' }}>
           <div className="card-header"><span className="card-title">New Stock</span></div>
@@ -116,7 +125,6 @@ export default function Admin() {
         </div>
       )}
 
-      {/* Stock Management Table */}
       <div className="card">
         <div className="card-header">
           <span className="card-title">All Stocks ({stocks.length})</span>
@@ -125,7 +133,7 @@ export default function Admin() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>ID</th><th>Symbol</th><th>Company</th><th>Price</th><th>Total Shares</th><th>Status</th><th>Actions</th></tr>
+              <tr><th>ID</th><th>Symbol</th><th>Company</th><th>Price</th><th>Shares</th><th>Status</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {stocks.map(s => (
@@ -138,46 +146,45 @@ export default function Admin() {
                   <td><span className={`tag ${s.tradable ? 'tag-green' : 'tag-red'}`}>{s.tradable ? 'Active' : 'Halted'}</span></td>
                   <td>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button
-                        onClick={() => handleToggle(s)}
-                        style={{
-                          background: s.tradable ? 'var(--yellow-dim)' : 'var(--green-dim)',
-                          color: s.tradable ? 'var(--yellow)' : 'var(--green)',
-                          border: `1px solid ${s.tradable ? 'var(--yellow)' : 'var(--green)'}`,
-                          padding: '6px 12px', fontSize: 12, borderRadius: 6,
-                          display: 'flex', alignItems: 'center', gap: 4
-                        }}
-                      >
+                      <button onClick={() => handleToggle(s)} style={{
+                        background: s.tradable ? 'var(--yellow-dim)' : 'var(--green-dim)',
+                        color: s.tradable ? 'var(--yellow)' : 'var(--green)',
+                        border: `1px solid ${s.tradable ? 'var(--yellow)' : 'var(--green)'}`,
+                        padding: '6px 12px', fontSize: 12, borderRadius: 6,
+                        display: 'flex', alignItems: 'center', gap: 4
+                      }}>
                         {s.tradable ? <><Pause size={12} /> Halt</> : <><Play size={12} /> Enable</>}
                       </button>
                       <button className="btn-danger" onClick={() => handleDelete(s.id, s.symbol)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Trash2 size={12} /> Delete
+                        disabled={deletingId === s.id}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, opacity: deletingId === s.id ? 0.6 : 1 }}>
+                        <Trash2 size={12} /> {deletingId === s.id ? 'Deleting...' : 'Delete'}
                       </button>
                     </div>
                   </td>
                 </tr>
               ))}
               {stocks.length === 0 && (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No stocks. Add one above.</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+                  No stocks yet. Add one above.
+                </td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid-3" style={{ marginTop: 24 }}>
         <div className="card">
           <div className="card-title" style={{ marginBottom: 8 }}>Total Stocks</div>
           <div className="mono" style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>{stocks.length}</div>
         </div>
         <div className="card">
-          <div className="card-title" style={{ marginBottom: 8 }}>Active Stocks</div>
+          <div className="card-title" style={{ marginBottom: 8 }}>Active</div>
           <div className="mono" style={{ fontSize: 28, fontWeight: 700, color: 'var(--green)' }}>{stocks.filter(s => s.tradable).length}</div>
         </div>
         <div className="card">
-          <div className="card-title" style={{ marginBottom: 8 }}>Halted Stocks</div>
+          <div className="card-title" style={{ marginBottom: 8 }}>Halted</div>
           <div className="mono" style={{ fontSize: 28, fontWeight: 700, color: 'var(--red)' }}>{stocks.filter(s => !s.tradable).length}</div>
         </div>
       </div>

@@ -3,10 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getStocks, getPortfolio, getPnL, getMarketStatus } from '../services/api'
 import { TrendingUp, TrendingDown, DollarSign, Briefcase, Activity, ArrowRight } from 'lucide-react'
-import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts'
 import './Dashboard.css'
 
-function StatCard({ label, value, sub, color, icon: Icon, trend }) {
+function StatCard({ label, value, sub, color, icon: Icon }) {
   return (
     <div className="stat-card card fade-in">
       <div className="stat-top">
@@ -17,18 +16,12 @@ function StatCard({ label, value, sub, color, icon: Icon, trend }) {
       </div>
       <div className="stat-value mono" style={{ color }}>{value}</div>
       {sub && <div className="stat-sub">{sub}</div>}
-      {trend !== undefined && (
-        <div className={`stat-trend ${trend >= 0 ? 'positive' : 'negative'}`}>
-          {trend >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-          {trend >= 0 ? '+' : ''}{trend?.toFixed(2)}%
-        </div>
-      )}
     </div>
   )
 }
 
 export default function Dashboard() {
-  const { user } = useAuth()
+  const { user, refreshUser } = useAuth()
   const navigate = useNavigate()
   const [stocks, setStocks] = useState([])
   const [portfolio, setPortfolio] = useState([])
@@ -36,7 +29,7 @@ export default function Dashboard() {
   const [marketStatus, setMarketStatus] = useState('CLOSED')
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  const loadData = () => {
     Promise.all([getStocks(), getPortfolio(), getPnL(), getMarketStatus()])
       .then(([s, p, pnlRes, ms]) => {
         setStocks(s.data)
@@ -46,17 +39,22 @@ export default function Dashboard() {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    loadData()
+    refreshUser() // Always refresh balance on dashboard load
 
     const interval = setInterval(() => {
-      getStocks().then(r => setStocks(r.data)).catch(() => {})
-    }, 6000)
+      loadData()
+      refreshUser()
+    }, 8000)
     return () => clearInterval(interval)
   }, [])
 
   const totalPnl = pnl['TOTAL'] || 0
-  const portfolioValue = portfolio.reduce((sum, p) => {
-    return sum + (p.stock?.price || 0) * (p.quantity || 0)
-  }, 0)
+  const portfolioValue = portfolio.reduce((sum, p) =>
+    sum + (Number(p.stock?.price) || 0) * (Number(p.quantity) || 0), 0)
 
   if (loading) return <div className="page"><div className="spinner" /></div>
 
@@ -74,31 +72,19 @@ export default function Dashboard() {
       </div>
 
       <div className="grid-4" style={{ marginBottom: 24 }}>
-        <StatCard
-          label="Balance"
+        <StatCard label="Balance"
           value={`₹${Number(user?.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
-          icon={DollarSign}
-          color="var(--accent)"
-        />
-        <StatCard
-          label="Portfolio Value"
+          icon={DollarSign} color="var(--accent)" />
+        <StatCard label="Portfolio Value"
           value={`₹${portfolioValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
-          icon={Briefcase}
-          color="var(--blue)"
-        />
-        <StatCard
-          label="Total P&L"
+          icon={Briefcase} color="var(--blue)" />
+        <StatCard label="Total P&L"
           value={`${totalPnl >= 0 ? '+' : ''}₹${Number(totalPnl).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
           icon={totalPnl >= 0 ? TrendingUp : TrendingDown}
-          color={totalPnl >= 0 ? 'var(--green)' : 'var(--red)'}
-        />
-        <StatCard
-          label="Holdings"
-          value={portfolio.length}
-          sub={`${portfolio.length} stocks`}
-          icon={Activity}
-          color="var(--yellow)"
-        />
+          color={totalPnl >= 0 ? 'var(--green)' : 'var(--red)'} />
+        <StatCard label="Holdings" value={portfolio.length}
+          sub={`${portfolio.length} stock${portfolio.length !== 1 ? 's' : ''}`}
+          icon={Activity} color="var(--yellow)" />
       </div>
 
       <div className="grid-2" style={{ marginBottom: 24 }}>
@@ -106,31 +92,21 @@ export default function Dashboard() {
         <div className="card">
           <div className="card-header">
             <span className="card-title">Live Market</span>
-            <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => navigate('/trade')}>
+            <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
+              onClick={() => navigate('/trade')}>
               Trade <ArrowRight size={12} />
             </button>
           </div>
           <div className="table-wrap">
             <table>
-              <thead>
-                <tr>
-                  <th>Symbol</th>
-                  <th>Company</th>
-                  <th>Price</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
+              <thead><tr><th>Symbol</th><th>Company</th><th>Price</th><th>Status</th></tr></thead>
               <tbody>
-                {stocks.slice(0, 8).map(stock => (
+                {stocks.filter(s => s.symbol !== 'system' && s.companyName).slice(0, 8).map(stock => (
                   <tr key={stock.id} className="clickable-row" onClick={() => navigate(`/trade/${stock.symbol}`)}>
                     <td><span className="mono" style={{ fontWeight: 700, color: 'var(--accent)' }}>{stock.symbol}</span></td>
                     <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{stock.companyName}</td>
                     <td><span className="mono">₹{Number(stock.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></td>
-                    <td>
-                      <span className={`tag ${stock.tradable ? 'tag-green' : 'tag-red'}`}>
-                        {stock.tradable ? 'Active' : 'Halted'}
-                      </span>
-                    </td>
+                    <td><span className={`tag ${stock.tradable ? 'tag-green' : 'tag-red'}`}>{stock.tradable ? 'Active' : 'Halted'}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -138,11 +114,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Portfolio Summary */}
+        {/* Holdings */}
         <div className="card">
           <div className="card-header">
             <span className="card-title">My Holdings</span>
-            <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => navigate('/portfolio')}>
+            <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
+              onClick={() => navigate('/portfolio')}>
               View All <ArrowRight size={12} />
             </button>
           </div>
@@ -157,14 +134,7 @@ export default function Dashboard() {
           ) : (
             <div className="table-wrap">
               <table>
-                <thead>
-                  <tr>
-                    <th>Symbol</th>
-                    <th>Qty</th>
-                    <th>Avg Price</th>
-                    <th>P&L</th>
-                  </tr>
-                </thead>
+                <thead><tr><th>Symbol</th><th>Qty</th><th>Avg Price</th><th>P&L</th></tr></thead>
                 <tbody>
                   {portfolio.slice(0, 6).map(p => {
                     const pl = pnl[p.stock?.symbol] || 0
@@ -173,11 +143,9 @@ export default function Dashboard() {
                         <td><span className="mono" style={{ fontWeight: 700 }}>{p.stock?.symbol}</span></td>
                         <td><span className="mono">{p.quantity}</span></td>
                         <td><span className="mono">₹{Number(p.averagePrice).toFixed(2)}</span></td>
-                        <td>
-                          <span className={`mono ${pl >= 0 ? 'positive' : 'negative'}`}>
-                            {pl >= 0 ? '+' : ''}₹{Number(pl).toFixed(2)}
-                          </span>
-                        </td>
+                        <td><span className={`mono ${pl >= 0 ? 'positive' : 'negative'}`}>
+                          {pl >= 0 ? '+' : ''}₹{Number(pl).toFixed(2)}
+                        </span></td>
                       </tr>
                     )
                   })}

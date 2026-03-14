@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @RestController
@@ -23,34 +22,19 @@ public class OrderController {
     private final OrderService     orderService;
     private final OrderBookService orderBookService;
 
-    /**
-     * Async order placement.
-     * The HTTP request returns only after the order is saved + matched,
-     * but the matching runs on the orderExecutor thread pool — not Tomcat's.
-     * Multiple simultaneous requests are handled in parallel.
-     */
     @PostMapping("/place")
-    public CompletableFuture<ResponseEntity<Object>> placeOrder(
-            Authentication authentication,
-            @RequestBody OrderRequest request) {
-
-        return orderService
-                .placeOrderAsync(authentication.getName(), request)
-                .thenApply(order ->
-                        ResponseEntity.ok((Object) Map.of(
-                                "message", "Order placed successfully",
-                                "orderId", order.getId()
-                        ))
-                )
-                .exceptionally(ex -> {
-                    String msg = ex.getCause() != null
-                            ? ex.getCause().getMessage()
-                            : ex.getMessage();
-                    log.warn("[OrderController] Order failed: {}", msg);
-                    return ResponseEntity
-                            .badRequest()
-                            .body(Map.of("error", msg));
-                });
+    public ResponseEntity<?> placeOrder(Authentication authentication,
+                                        @RequestBody OrderRequest request) {
+        try {
+            Order order = orderService.placeOrder(authentication.getName(), request);
+            return ResponseEntity.ok(Map.of(
+                    "message", "Order placed successfully",
+                    "orderId", order.getId()
+            ));
+        } catch (Exception e) {
+            log.warn("[OrderController] Order failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @GetMapping("/my")
