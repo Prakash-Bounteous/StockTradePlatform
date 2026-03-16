@@ -48,7 +48,7 @@ export default function Layout() {
       <aside className="sidebar">
         <div className="sidebar-logo">
           <Zap size={20} className="logo-icon" />
-          <span className="logo-text">TradePro</span>
+          <span className="logo-text">Nevex</span>
         </div>
 
         <div className="market-status-pill">
