@@ -9,11 +9,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
-@Getter
-@Setter
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor
 public class User {
 
     @Id
@@ -44,8 +40,12 @@ public class User {
     @PrePersist
     public void prePersist() {
         this.createdAt = LocalDateTime.now();
-        if (balance == null) balance = BigDecimal.valueOf(100000);
-        if (marginMultiplier == null) marginMultiplier = BigDecimal.valueOf(5);
+
+        // New users start with ZERO balance
+        // They must deposit money before trading
+        if (balance == null) balance = BigDecimal.ZERO;
+
+        if (marginMultiplier == null) marginMultiplier = BigDecimal.valueOf(2);
         if (usedMargin == null) usedMargin = BigDecimal.ZERO;
     }
 }

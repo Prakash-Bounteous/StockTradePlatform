@@ -11,6 +11,7 @@ import Watchlist from './pages/Watchlist'
 import Leaderboard from './pages/Leaderboard'
 import Notifications from './pages/Notifications'
 import Admin from './pages/Admin'
+import Deposit from './pages/Deposit'
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth()
@@ -34,7 +35,7 @@ function PublicRoute({ children }) {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <ToastProvider>
           <Routes>
@@ -50,6 +51,7 @@ export default function App() {
               <Route path="leaderboard" element={<Leaderboard />} />
               <Route path="notifications" element={<Notifications />} />
               <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
+              <Route path="deposit" element={<Deposit />} />
             </Route>
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>

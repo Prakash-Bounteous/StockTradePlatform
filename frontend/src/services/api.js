@@ -71,3 +71,8 @@ export const adminEnableTrading = (id) => api.post(`/admin/stocks/${id}/enable`)
 export const adminDisableTrading = (id) => api.post(`/admin/stocks/${id}/disable`)
 
 export default api
+
+export const withdraw = (data) => api.post('/users/withdraw', data)
+
+// Margin
+export const getMarginInfo = () => api.get('/margin/info')

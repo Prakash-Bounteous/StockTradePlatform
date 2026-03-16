@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getStocks, getPortfolio, getPnL, getMarketStatus } from '../services/api'
-import { TrendingUp, TrendingDown, DollarSign, Briefcase, Activity, ArrowRight } from 'lucide-react'
+import { TrendingUp, TrendingDown, DollarSign, Briefcase, Activity, ArrowRight, Wallet } from 'lucide-react'
 import './Dashboard.css'
 
 function StatCard({ label, value, sub, color, icon: Icon }) {
@@ -70,6 +70,28 @@ export default function Dashboard() {
           Market {marketStatus}
         </div>
       </div>
+
+      {/* Zero balance prompt */}
+      {Number(user?.balance || 0) === 0 && (
+        <div style={{
+          background: 'var(--yellow-dim)', border: '1px solid var(--yellow)',
+          borderRadius: 'var(--radius-lg)', padding: '16px 20px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginBottom: 20, flexWrap: 'wrap', gap: 12
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Wallet size={20} style={{ color: 'var(--yellow)' }} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>Your account has no funds yet</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Add money to start trading stocks</div>
+            </div>
+          </div>
+          <button className="btn-primary" onClick={() => navigate('/deposit')}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Wallet size={14} /> Deposit Now
+          </button>
+        </div>
+      )}
 
       <div className="grid-4" style={{ marginBottom: 24 }}>
         <StatCard label="Balance"

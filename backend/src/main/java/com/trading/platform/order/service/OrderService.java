@@ -1,139 +1,10 @@
-//package com.trading.platform.order.service;
-//
-//import com.trading.platform.engine.OrderBook;
-//import com.trading.platform.engine.OrderBookManager;
-//import com.trading.platform.engine.service.MatchingEngine;
-//import com.trading.platform.order.dto.OrderRequest;
-//import com.trading.platform.order.entity.Order;
-//import com.trading.platform.order.model.*;
-//import com.trading.platform.order.repository.OrderRepository;
-//import com.trading.platform.stock.entity.Stock;
-//import com.trading.platform.stock.repository.StockRepository;
-//import com.trading.platform.trade.service.TradeService;
-//import com.trading.platform.user.entity.User;
-//import com.trading.platform.user.repository.UserRepository;
-//import lombok.RequiredArgsConstructor;
-//import lombok.extern.slf4j.Slf4j;
-//import org.springframework.stereotype.Service;
-//import org.springframework.transaction.annotation.Transactional;
-//
-//import java.math.BigDecimal;
-//import java.util.List;
-//import java.util.concurrent.locks.ReentrantLock;
-//
-//@Slf4j
-//@Service
-//@RequiredArgsConstructor
-//public class OrderService {
-//
-//    private final OrderRepository  orderRepository;
-//    private final OrderBookManager orderBookManager;
-//    private final MatchingEngine   matchingEngine;
-//    private final StockRepository  stockRepository;
-//    private final UserRepository   userRepository;
-//    private final TradeService     tradeService;
-//
-//    @Transactional
-//    public Order placeOrder(String username, OrderRequest request) {
-//
-//        User user = userRepository.findByUsername(username)
-//                .orElseThrow(() -> new RuntimeException("User not found"));
-//
-//        Stock stock = stockRepository.findBySymbol(request.getSymbol())
-//                .orElseThrow(() -> new RuntimeException("Stock not found: " + request.getSymbol()));
-//
-//        if (!stock.isTradable())
-//            throw new RuntimeException("Trading is disabled for " + request.getSymbol());
-//
-//        OrderSide side = OrderSide.valueOf(request.getSide().toUpperCase());
-//        OrderType type = OrderType.valueOf(request.getType().toUpperCase());
-//        BigDecimal price = (type == OrderType.MARKET) ? stock.getPrice() : request.getPrice();
-//        Long quantity = request.getQuantity();
-//
-//        if (side == OrderSide.BUY) {
-//            BigDecimal totalCost = price.multiply(BigDecimal.valueOf(quantity));
-//            if (user.getBalance().compareTo(totalCost) < 0)
-//                throw new RuntimeException("Insufficient balance. Need ₹"
-//                        + totalCost + " but have ₹" + user.getBalance());
-//        }
-//
-//        if (side == OrderSide.SELL) {
-//            // Check user actually holds enough shares
-//            boolean hasShares = false;
-//            var portfolio = user.getId() != null
-//                    ? tradeService.getPortfolioQuantity(user, stock)
-//                    : 0L;
-//            if (portfolio < quantity)
-//                throw new RuntimeException("Insufficient shares. You hold "
-//                        + portfolio + " shares of " + stock.getSymbol());
-//        }
-//
-//        // ---------------------------------------------------------------
-//        // INSTANT EXECUTION: For a simulation platform, every order
-//        // executes immediately against the market (system as counterparty).
-//        // This ensures balance, portfolio, notifications all update instantly.
-//        // ---------------------------------------------------------------
-//        if (side == OrderSide.BUY) {
-//            // System sells to user
-//            User systemSeller = getSystemAccount();
-//            tradeService.executeTrade(user, systemSeller, stock, quantity, price);
-//        } else {
-//            // System buys from user
-//            User systemBuyer = getSystemAccount();
-//            tradeService.executeTrade(systemBuyer, user, stock, quantity, price);
-//        }
-//
-//        // Also save the order record for history
-//        Order order = Order.builder()
-//                .user(user).stock(stock).side(side).type(type)
-//                .price(price).quantity(quantity)
-//                .remainingQuantity(0L)
-//                .status(OrderStatus.FILLED)
-//                .build();
-//        orderRepository.save(order);
-//
-//        // Still add to order book for limit order matching between real users
-//        if (type == OrderType.LIMIT) {
-//            OrderBook orderBook = orderBookManager.getOrderBook(stock.getSymbol());
-//            ReentrantLock lock = orderBook.getLock();
-//            lock.lock();
-//            try {
-//                orderBook.addOrder(order);
-//                matchingEngine.match(orderBook);
-//            } finally {
-//                lock.unlock();
-//            }
-//        }
-//
-//        log.info("[OrderService] {} {} x {} @ ₹{} executed for {}",
-//                side, quantity, stock.getSymbol(), price, username);
-//
-//        return order;
-//    }
-//
-//    private User getSystemAccount() {
-//        return userRepository.findByUsername("system")
-//                .orElseGet(() -> {
-//                    User system = User.builder()
-//                            .username("system")
-//                            .email("system@tradepro.internal")
-//                            .password("$2a$10$disabled")
-//                            .balance(BigDecimal.valueOf(999999999))
-//                            .build();
-//                    return userRepository.save(system);
-//                });
-//    }
-//
-//    public List<Order> getOrdersForUser(String username) {
-//        User user = userRepository.findByUsername(username).orElseThrow();
-//        return orderRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
-//    }
-//}
 package com.trading.platform.order.service;
 
 import com.trading.platform.engine.OrderBook;
 import com.trading.platform.engine.OrderBookManager;
 import com.trading.platform.engine.service.MatchingEngine;
+import com.trading.platform.margin.service.MarginCallService;
+import com.trading.platform.margin.service.MarginService;
 import com.trading.platform.order.dto.OrderRequest;
 import com.trading.platform.order.entity.Order;
 import com.trading.platform.order.model.*;
@@ -163,6 +34,8 @@ public class OrderService {
     private final StockRepository  stockRepository;
     private final UserRepository   userRepository;
     private final TradeService     tradeService;
+    private final MarginService    marginService;
+    private final MarginCallService marginCallService;
 
     @Transactional
     public Order placeOrder(String username, OrderRequest request) {
@@ -180,35 +53,43 @@ public class OrderService {
         OrderType type = OrderType.valueOf(request.getType().toUpperCase());
         BigDecimal price = (type == OrderType.MARKET) ? stock.getPrice() : request.getPrice();
         Long quantity = request.getQuantity();
+        BigDecimal totalCost = price.multiply(BigDecimal.valueOf(quantity));
 
-        // --- Validations ---
+        // ---------------------------------------------------------------
+        // VALIDATION
+        // ---------------------------------------------------------------
         if (side == OrderSide.BUY) {
-            BigDecimal totalCost = price.multiply(BigDecimal.valueOf(quantity));
-            if (user.getBalance().compareTo(totalCost) < 0)
-                throw new RuntimeException("Insufficient balance. Need ₹"
-                        + totalCost + " but have ₹" + user.getBalance());
+            // Use margin trading power instead of raw balance
+            // Example: balance=₹1,00,000 × 2x multiplier = ₹2,00,000 buying power
+            BigDecimal tradingPower = marginService.getTradingPower(user);
+            if (tradingPower.compareTo(totalCost) < 0) {
+                throw new RuntimeException(
+                        "Insufficient margin. Order value ₹" + totalCost
+                                + " exceeds your trading power ₹" + tradingPower
+                                + " (Balance ₹" + user.getBalance()
+                                + " × " + marginService.getOrCreateAccount(user).getMarginMultiplier() + "x margin)"
+                );
+            }
         }
 
         if (side == OrderSide.SELL) {
             Long held = tradeService.getPortfolioQuantity(user, stock);
-            if (held < quantity)
-                throw new RuntimeException("Insufficient shares. You hold "
-                        + held + " shares of " + stock.getSymbol());
+            if (held < quantity) {
+                throw new RuntimeException(
+                        "Insufficient shares. You hold " + held
+                                + " shares of " + stock.getSymbol()
+                                + " but tried to sell " + quantity
+                );
+            }
         }
 
         // ---------------------------------------------------------------
         // OPTION C — HYBRID EXECUTION
-        //
-        // MARKET orders → execute instantly via system account
-        //   No waiting, always fills, system is the counterparty
-        //
-        // LIMIT orders  → go into real order book
-        //   Waits until a real user places a matching opposite order
-        //   Matching engine runs and pairs them together
+        // MARKET → instant via system account
+        // LIMIT  → real order book matching between users
         // ---------------------------------------------------------------
-
         if (type == OrderType.MARKET) {
-            return executeMarketOrder(user, stock, side, price, quantity);
+            return executeMarketOrder(user, stock, side, price, quantity, totalCost);
         } else {
             return executeLimitOrder(user, stock, side, price, quantity);
         }
@@ -217,24 +98,30 @@ public class OrderService {
     // ---------------------------------------------------------------
     // MARKET ORDER — instant execution via system account
     // ---------------------------------------------------------------
-    private Order executeMarketOrder(User user, Stock stock,
-                                     OrderSide side, BigDecimal price, Long quantity) {
-
+    private Order executeMarketOrder(User user, Stock stock, OrderSide side,
+                                     BigDecimal price, Long quantity, BigDecimal totalCost) {
         User system = getSystemAccount();
 
         if (side == OrderSide.BUY) {
-            // System sells to user instantly
             tradeService.executeTrade(user, system, stock, quantity, price);
-            log.info("[MARKET] {} bought {} x {} @ ₹{} from system",
+            // Track how much margin was used for this buy
+            marginService.updateUsedMargin(user, totalCost, true);
+            log.info("[MARKET BUY] {} bought {} x {} @ ₹{}",
                     user.getUsername(), quantity, stock.getSymbol(), price);
         } else {
-            // System buys from user instantly
             tradeService.executeTrade(system, user, stock, quantity, price);
-            log.info("[MARKET] {} sold {} x {} @ ₹{} to system",
+            // Selling reduces used margin
+            marginService.updateUsedMargin(user, totalCost, false);
+            log.info("[MARKET SELL] {} sold {} x {} @ ₹{}",
                     user.getUsername(), quantity, stock.getSymbol(), price);
         }
 
-        // Save order record as FILLED immediately
+        // Re-fetch user to get updated balance after trade
+        User updatedUser = userRepository.findById(user.getId()).orElse(user);
+
+        // Check if margin call triggered after this trade
+        marginCallService.checkAndTrigger(updatedUser);
+
         Order order = Order.builder()
                 .user(user).stock(stock)
                 .side(side).type(OrderType.MARKET)
@@ -247,12 +134,10 @@ public class OrderService {
     }
 
     // ---------------------------------------------------------------
-    // LIMIT ORDER — goes into real order book, waits for real match
+    // LIMIT ORDER — real order book matching between users
     // ---------------------------------------------------------------
     private Order executeLimitOrder(User user, Stock stock,
                                     OrderSide side, BigDecimal price, Long quantity) {
-
-        // Save order as PENDING — not filled yet
         Order order = Order.builder()
                 .user(user).stock(stock)
                 .side(side).type(OrderType.LIMIT)
@@ -263,17 +148,19 @@ public class OrderService {
 
         orderRepository.save(order);
 
-        // Add to order book and try to match with existing opposite orders
-        // Per-stock lock ensures thread safety — only one thread
-        // can add + match for a given stock at a time
         OrderBook orderBook = orderBookManager.getOrderBook(stock.getSymbol());
         ReentrantLock lock = orderBook.getLock();
         lock.lock();
         try {
             orderBook.addOrder(order);
-            matchingEngine.match(orderBook); // tries to match with real opposite orders
-            log.info("[LIMIT] {} placed {} {} x {} @ ₹{} — status: {}",
-                    user.getUsername(), side, quantity, stock.getSymbol(), price, order.getStatus());
+            matchingEngine.match(orderBook);
+
+            // After matching, check margin call for any users whose balance changed
+            User updatedUser = userRepository.findById(user.getId()).orElse(user);
+            marginCallService.checkAndTrigger(updatedUser);
+
+            log.info("[LIMIT {}] {} placed {} x {} @ ₹{} — status: {}",
+                    side, user.getUsername(), quantity, stock.getSymbol(), price, order.getStatus());
         } finally {
             lock.unlock();
         }
@@ -282,8 +169,7 @@ public class OrderService {
     }
 
     // ---------------------------------------------------------------
-    // System account — internal market maker for MARKET orders only
-    // Never appears in leaderboard or any user-facing UI
+    // System account — silent market maker for MARKET orders only
     // ---------------------------------------------------------------
     private User getSystemAccount() {
         return userRepository.findByUsername("system")
@@ -291,7 +177,7 @@ public class OrderService {
                     User system = User.builder()
                             .username("system")
                             .email("system@tradepro.internal")
-                            .password("$2a$10$disabled") // cannot login
+                            .password("$2a$10$disabled")
                             .balance(BigDecimal.valueOf(999_999_999))
                             .build();
                     log.info("[System] Created system market maker account");

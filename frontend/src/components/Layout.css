@@ -168,3 +168,20 @@
 @media (max-width: 768px) {
   .sidebar { width: 200px; min-width: 200px; }
 }
+
+/* Add Funds nav item — accent highlight */
+.nav-item.deposit-nav {
+  color: var(--accent);
+  border: 1px solid var(--accent)33;
+  background: var(--accent-dim);
+  margin-top: 8px;
+}
+.nav-item.deposit-nav:hover {
+  background: var(--accent);
+  color: #000;
+}
+.nav-item.deposit-nav.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}

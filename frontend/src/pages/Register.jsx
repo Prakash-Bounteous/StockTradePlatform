@@ -49,7 +49,7 @@ export default function Register() {
       <div className="auth-card fade-in">
         <div className="auth-logo">
           <Zap size={28} />
-          <span>TradePro</span>
+          <span>Nevex</span>
         </div>
         <h1 className="auth-title">Create Account</h1>
         <p className="auth-subtitle">Start trading with ₹1,00,000 virtual balance</p>

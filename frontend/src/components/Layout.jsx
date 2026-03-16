@@ -4,17 +4,17 @@ import { useEffect, useState } from 'react'
 import { getMarketStatus, getNotifications } from '../services/api'
 import {
   LayoutDashboard, TrendingUp, Briefcase, Star,
-  Trophy, Bell, Shield, LogOut, Zap
+  Trophy, Bell, Shield, LogOut, Zap, Wallet
 } from 'lucide-react'
 import './Layout.css'
 
 const navItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/trade', label: 'Trade', icon: TrendingUp },
-  { path: '/portfolio', label: 'Portfolio', icon: Briefcase },
-  { path: '/watchlist', label: 'Watchlist', icon: Star },
-  { path: '/leaderboard', label: 'Leaderboard', icon: Trophy },
-  { path: '/notifications', label: 'Notifications', icon: Bell },
+  { path: '/dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
+  { path: '/trade',         label: 'Trade',          icon: TrendingUp },
+  { path: '/portfolio',     label: 'Portfolio',      icon: Briefcase },
+  { path: '/watchlist',     label: 'Watchlist',      icon: Star },
+  { path: '/leaderboard',   label: 'Leaderboard',    icon: Trophy },
+  { path: '/notifications', label: 'Notifications',  icon: Bell },
 ]
 
 export default function Layout() {
@@ -28,9 +28,12 @@ export default function Layout() {
     getNotifications().then(r => {
       setUnreadCount(r.data.filter(n => !n.read).length)
     }).catch(() => {})
+
     const interval = setInterval(() => {
       getMarketStatus().then(r => setMarketStatus(r.data)).catch(() => {})
-      getNotifications().then(r => setUnreadCount(r.data.filter(n => !n.read).length)).catch(() => {})
+      getNotifications().then(r => {
+        setUnreadCount(r.data.filter(n => !n.read).length)
+      }).catch(() => {})
     }, 10000)
     return () => clearInterval(interval)
   }, [])
@@ -67,20 +70,37 @@ export default function Layout() {
               )}
             </NavLink>
           ))}
+
           {user?.role === 'ADMIN' && (
-            <NavLink to="/admin" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <NavLink
+              to="/admin"
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            >
               <Shield size={18} />
               <span>Admin</span>
             </NavLink>
           )}
+
+          {/* Funds — always visible, highlighted */}
+          <NavLink
+            to="/deposit"
+            className={({ isActive }) => `nav-item deposit-nav ${isActive ? 'active' : ''}`}
+          >
+            <Wallet size={18} />
+            <span>Funds</span>
+          </NavLink>
         </nav>
 
         <div className="sidebar-footer">
           <div className="user-info">
-            <div className="user-avatar">{user?.username?.[0]?.toUpperCase()}</div>
+            <div className="user-avatar">
+              {user?.username?.[0]?.toUpperCase()}
+            </div>
             <div>
               <div className="user-name">{user?.username}</div>
-              <div className="user-balance mono">₹{Number(user?.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+              <div className="user-balance mono">
+                ₹{Number(user?.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
             </div>
           </div>
           <button className="logout-btn" onClick={handleLogout} title="Logout">

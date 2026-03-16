@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getStocks, placeOrder, getPriceHistory, getBuyOrders, getSellOrders } from '../services/api'
+import { getStocks, placeOrder, getPriceHistory, getBuyOrders, getSellOrders, getMarginInfo } from '../services/api'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 import { TrendingUp, TrendingDown, Search } from 'lucide-react'
@@ -34,8 +34,10 @@ export default function Trade() {
   const [loading, setLoading] = useState(true)
   const [placing, setPlacing] = useState(false)
   const [form, setForm] = useState({ side: 'BUY', type: 'MARKET', quantity: '', price: '' })
+  const [marginInfo, setMarginInfo] = useState(null)
 
   useEffect(() => {
+    getMarginInfo().then(r => setMarginInfo(r.data)).catch(() => {})
     getStocks().then(r => {
       setStocks(r.data)
       const sym = paramSymbol || r.data[0]?.symbol
@@ -227,11 +229,25 @@ export default function Trade() {
         <div className="order-panel card">
           <div className="card-header"><span className="card-title">Place Order</span></div>
 
-          <div className="balance-display">
-            <span className="muted" style={{ fontSize: 12 }}>Available Balance</span>
-            <span className="mono" style={{ color: 'var(--accent)', fontWeight: 700 }}>
-              ₹{Number(user?.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </span>
+          {/* Margin Info Panel */}
+          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="muted" style={{ fontSize: 11 }}>Cash Balance</span>
+              <span className="mono" style={{ fontSize: 13, fontWeight: 700 }}>₹{Number(user?.balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="muted" style={{ fontSize: 11 }}>Margin</span>
+              <span className="mono" style={{ fontSize: 12, color: 'var(--blue)' }}>{marginInfo?.marginMultiplier || 2}x</span>
+            </div>
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)' }}>Trading Power</span>
+              <span className="mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>₹{Number(marginInfo?.tradingPower || (user?.balance || 0) * 2).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            </div>
+            {marginInfo?.marginCallTriggered && (
+              <div style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: 6, padding: '6px 10px', fontSize: 11, color: 'var(--red)', fontWeight: 700, textAlign: 'center' }}>
+                ⚠️ MARGIN CALL ACTIVE
+              </div>
+            )}
           </div>
 
           <div className="side-toggle">

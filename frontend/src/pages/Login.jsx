@@ -48,7 +48,7 @@ export default function Login() {
       <div className="auth-card fade-in">
         <div className="auth-logo">
           <Zap size={28} />
-          <span>TradePro</span>
+          <span>Nevex</span>
         </div>
         <h1 className="auth-title">Sign In</h1>
         <p className="auth-subtitle">Access your trading dashboard</p>

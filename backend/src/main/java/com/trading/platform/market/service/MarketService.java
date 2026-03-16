@@ -7,7 +7,7 @@ import java.time.LocalTime;
 @Service
 public class MarketService {
     private final LocalTime marketOpen = LocalTime.of(1, 15);
-    private final LocalTime marketClose = LocalTime.of(23, 30);
+    private final LocalTime marketClose = LocalTime.of(23, 59);
 
     public boolean isMarketOpen() {
         LocalTime now = LocalTime.now();
