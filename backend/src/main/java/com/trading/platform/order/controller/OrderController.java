@@ -1,6 +1,7 @@
 package com.trading.platform.order.controller;
 
 import com.trading.platform.engine.service.OrderBookService;
+import com.trading.platform.order.Exception.*;
 import com.trading.platform.order.dto.*;
 import com.trading.platform.order.entity.Order;
 import com.trading.platform.order.service.OrderService;
@@ -34,11 +35,19 @@ public class OrderController {
         } catch (Exception e) {
             log.warn("[OrderController] Order failed: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (InsufficientBalanceException e) {
+            throw new RuntimeException(e);
+        } catch (InvalidRequestException e) {
+            throw new RuntimeException(e);
+        } catch (TradingHaltedException e) {
+            throw new RuntimeException(e);
+        } catch (InsufficientSharesException e) {
+            throw new RuntimeException(e);
         }
     }
 
     @GetMapping("/my")
-    public List<Order> getMyOrders(Authentication authentication) {
+    public List<Order> getMyOrders(Authentication authentication) throws ResourceNotFoundException {
         return orderService.getOrdersForUser(authentication.getName());
     }
 

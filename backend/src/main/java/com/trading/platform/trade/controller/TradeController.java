@@ -12,7 +12,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/trades")
 @RequiredArgsConstructor
-public class TradeController {
+public class   TradeController {
 
     private final TradeService tradeService;
     private final UserRepository userRepository;

@@ -10,7 +10,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-public class CircuitBreakerService {
+public class CircuitBreakerService { 
 
     private final StockRepository stockRepository;
 
