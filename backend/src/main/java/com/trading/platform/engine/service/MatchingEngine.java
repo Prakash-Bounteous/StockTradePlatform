@@ -81,6 +81,7 @@ import com.trading.platform.order.model.OrderStatus;
 import com.trading.platform.order.model.OrderType;
 import com.trading.platform.order.repository.OrderRepository;
 import com.trading.platform.trade.service.TradeService;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -143,6 +144,7 @@ public class MatchingEngine {
     // ─────────────────────────────────────────────────────────────
     // Execute one trade between top buy and top sell
     // ─────────────────────────────────────────────────────────────
+    @Transactional
     private void executeTrade(OrderBook orderBook, Order buy, Order sell) {
 
         long quantity = Math.min(
